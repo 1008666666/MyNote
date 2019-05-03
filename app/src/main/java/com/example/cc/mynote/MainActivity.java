@@ -4,17 +4,24 @@ import android.content.DialogInterface;
 import android.content.Intent;;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.provider.ContactsContract;
 import android.support.v4.widget.CursorAdapter;
 import android.support.v4.widget.SimpleCursorAdapter;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.TextUtils;
+import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.Filter;
+import android.widget.Filterable;
+import android.widget.ListAdapter;
 import android.widget.ListView;
+import android.widget.SearchView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,16 +36,18 @@ import java.util.List;
 
 
 public class MainActivity extends AppCompatActivity {
-//    private Cursor listItemCursor = null;
+
+    static final String[] PROJECTION = new String[] { ContactsContract.RawContacts._ID, ContactsContract.RawContacts.DISPLAY_NAME_PRIMARY };
+
     private Cursor cursor;
-   // private DaoMaster daoMaster;
-   // private DaoSession daoSession;
     private ListView lv_note;
     private Button btn_add;
     private PadDao padDao;
     private List<Pad> padList;
     private SQLiteDatabase db;
     private SimpleCursorAdapter adapter;
+    private SearchView sv_search;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,16 +55,20 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         lv_note = (ListView) findViewById(R.id.lv_note);
         btn_add = (Button) findViewById(R.id.btn_add);
+        sv_search = (SearchView)findViewById(R.id.sv_search);
         padList = new ArrayList<Pad>();
         padDao = MyGreenDAOApplication.getInstances().getDaoSession().getPadDao();
         db = MyGreenDAOApplication.getInstances().getDb();
         cursor = db.query(true, padDao.getTablename(), padDao.getAllColumns(), null, null, null, null, null, null);
-
         String[] from = {PadDao.Properties.Title.columnName, PadDao.Properties.Createtime.columnName};
         int[] to = {R.id.noteTitle, R.id.noteCreateTime};
+        //数据库适配器
         adapter = new SimpleCursorAdapter(this, R.layout.note_item, cursor, from, to, 0);
         lv_note.setAdapter(adapter);
+
+        lv_note.setTextFilterEnabled(true);
         initListNoteListener();
+        //添加按钮
         btn_add.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -67,6 +80,39 @@ public class MainActivity extends AppCompatActivity {
         });
         cursor.requery();
         adapter.notifyDataSetChanged();
+
+        Toast.makeText(MainActivity.this, padDao.getTablename(), Toast.LENGTH_SHORT).show();
+       // sv_search.setIconified(false);
+       // sv_search.onActionViewExpanded();
+        sv_search.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                sv_search.setIconified(false);
+            }
+        });
+        sv_search.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                cursor = db.rawQuery("select * from Pads where title like '%" + newText + "%'", null);
+                adapter.swapCursor(cursor); // 交换指针，展示新的数据
+                 return true;
+
+            }
+
+        });
+        sv_search.setOnCloseListener(new SearchView.OnCloseListener() {
+            @Override
+            public boolean onClose() {
+                Toast.makeText(MainActivity.this, "关闭搜索框", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        });
+
     }
 
 
@@ -86,13 +132,6 @@ public class MainActivity extends AppCompatActivity {
                                             @Override
                                             public void onClick(DialogInterface arg0,int arg1) {
                                                 padDao.deleteByKey(id);
-//                                                DBService.deleteNoteById((int) id);
-                                                //删除后刷新列表
-//                                                MainActivity.this.onResume();
-                                                //MainActivity.this.refresh();
-//                                                refresh();
-//                                                adapter
-                                               // adapter.notifyDataSetChanged();
                                                 cursor.requery();
                                                 adapter.notifyDataSetChanged();
                                                 Toast.makeText(
@@ -125,6 +164,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     protected void onResume() {
+        sv_search.setFocusable(true);
+        sv_search.setFocusableInTouchMode(true);
         super.onResume();
         cursor.requery();
         adapter.notifyDataSetChanged();
